@@ -1,4 +1,4 @@
-name: Build PRoot ARM64
+name: Build PRoot Android ARM64
 
 on:
   push:
@@ -9,42 +9,76 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-arm64:
-    name: Build PRoot ARM64 (aarch64)
+  build-android-arm64:
+    name: Build PRoot Android ARM64 (NDK)
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Source
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Compile PRoot & Loader (Native ARM64 Container)
+      - name: Setup Tools & Dependencies
         run: |
-          docker run --rm --platform linux/arm64 \
-            -v "$PWD":/workspace \
-            -w /workspace \
-            ubuntu:24.04 \
-            bash -c "
-              set -e
-              apt-get update -qq
-              apt-get install -qq -y gcc make libtalloc-dev uthash-dev
-              make -C src clean
-              make -C src loader.elf build.h proot WITHOUT_PYTHON=1 -j\$(nproc)
-              mkdir -p dist-arm64
-              cp src/proot dist-arm64/proot-aarch64
-              cp src/loader.elf dist-arm64/libproot.so
-              cp src/proot dist-arm64/libproot-xed.so
-              strip --strip-unneeded dist-arm64/*
-            "
+          sudo apt-get update -qq
+          sudo apt-get install -qq -y binutils-aarch64-linux-gnu uthash-dev pkg-config
 
-      - name: List Artifacts
-        run: ls -lh dist-arm64/
+      - name: Compile PRoot with Android NDK
+        run: |
+          set -e
+          
+          # Detect NDK path
+          if [ -d "$ANDROID_NDK_LATEST_HOME" ]; then
+            NDK="$ANDROID_NDK_LATEST_HOME"
+          elif [ -d "$ANDROID_NDK_ROOT" ]; then
+            NDK="$ANDROID_NDK_ROOT"
+          else
+            NDK=$(find /usr/local/lib/android/sdk/ndk -maxdepth 1 -mindepth 1 2>/dev/null | sort -V | tail -n 1)
+          fi
+          echo "Using Android NDK: $NDK"
+          
+          TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          
+          # Setup pre-generated build.h to avoid cross-compilation check fails
+          cat << 'EOF' > src/build.h
+#ifndef BUILD_H
+#define BUILD_H
+#define VERSION "5.5.0-android"
+#define HAVE_PROCESS_VM
+#define HAVE_SECCOMP_FILTER
+#endif
+EOF
 
-      - name: Upload PRoot ARM64 Artifacts
+          # Clean previous objects
+          make -C src clean || true
+
+          # Build proot and loader
+          make -C src proot \
+            CC="$TOOLCHAIN/aarch64-linux-android24-clang" \
+            LD="$TOOLCHAIN/aarch64-linux-android24-clang" \
+            STRIP="$TOOLCHAIN/llvm-strip" \
+            OBJCOPY="aarch64-linux-gnu-objcopy" \
+            OBJDUMP="aarch64-linux-gnu-objdump" \
+            PKG_CONFIG_PATH="$PWD/ndk-deps" \
+            CPPFLAGS="-I$PWD/ndk-deps/include -DARG_MAX=131072" \
+            LDFLAGS="-L$PWD/ndk-deps/lib -Wl,-rpath-link,$PWD/ndk-deps/lib" \
+            WITHOUT_PYTHON=1 \
+            V=1
+
+          mkdir -p dist-android-arm64
+          cp src/proot dist-android-arm64/libproot-xed.so
+          cp src/loader.elf dist-android-arm64/libproot.so
+          cp ndk-deps/lib/libtalloc.so dist-android-arm64/libtalloc.so
+          $TOOLCHAIN/llvm-strip dist-android-arm64/libproot-xed.so
+
+      - name: Verify ELF Details
+        run: |
+          readelf -h dist-android-arm64/libproot-xed.so
+          readelf -l dist-android-arm64/libproot-xed.so | grep -i interpreter || true
+          readelf -d dist-android-arm64/libproot-xed.so | grep NEEDED
+
+      - name: Upload Android PRoot Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: proot-arm64
-          path: dist-arm64/
+          name: proot-android-arm64
+          path: dist-android-arm64/
           retention-days: 90

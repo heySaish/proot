@@ -1,0 +1,10 @@
+prefix=${pcfiledir}
+exec_prefix=${prefix}
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: talloc
+Description: Hierarchical reference counted memory pool system
+Version: 2.4.2
+Libs: -L${libdir} -ltalloc
+Cflags: -I${includedir}
