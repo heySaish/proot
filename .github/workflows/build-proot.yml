@@ -22,10 +22,10 @@ jobs:
 
       - name: Compile PRoot & Loader (Native ARM64 Container)
         run: |
-          docker run --rm \
+          docker run --rm --platform linux/arm64 \
             -v "$PWD":/workspace \
             -w /workspace \
-            arm64v8/ubuntu:24.04 \
+            ubuntu:24.04 \
             bash -c "
               set -e
               apt-get update -qq
