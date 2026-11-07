@@ -55,7 +55,7 @@ jobs:
           make -C src proot \
             CC="$TOOLCHAIN/aarch64-linux-android24-clang" \
             LD="$TOOLCHAIN/aarch64-linux-android24-clang" \
-            STRIP="$TOOLCHAIN/llvm-strip" \
+            STRIP="aarch64-linux-gnu-strip" \
             OBJCOPY="aarch64-linux-gnu-objcopy" \
             OBJDUMP="aarch64-linux-gnu-objdump" \
             PKG_CONFIG_PATH="$PWD/ndk-deps" \
@@ -68,7 +68,7 @@ jobs:
           cp src/proot dist-android-arm64/libproot-xed.so
           cp src/loader.elf dist-android-arm64/libproot.so
           cp ndk-deps/lib/libtalloc.so dist-android-arm64/libtalloc.so
-          $TOOLCHAIN/llvm-strip dist-android-arm64/libproot-xed.so
+          aarch64-linux-gnu-strip dist-android-arm64/libproot-xed.so
 
       - name: Verify ELF Details
         run: |
