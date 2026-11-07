@@ -1,0 +1,104 @@
+name: Build PRoot Binaries
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-aarch64:
+    name: Build PRoot ARM64 (aarch64)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Setup ARM64 Cross Toolchain & Dependencies
+        run: |
+          sudo dpkg --add-architecture arm64
+          sudo tee /etc/apt/sources.list.d/arm64-ports.list > /dev/null <<'EOF'
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main universe
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe
+          EOF
+          sudo sed -i '/^Signed-By:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null || true
+          sudo apt-get update -qq
+          sudo apt-get install -qq -y \
+            crossbuild-essential-arm64 \
+            pkg-config \
+            uthash-dev \
+            qemu-user \
+            libarchive-dev:arm64 \
+            libtalloc-dev:arm64
+
+      - name: Compile PRoot & Loader (aarch64)
+        run: |
+          make -C src clean
+          make -C src loader.elf build.h proot \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            WITHOUT_PYTHON=1 \
+            -j$(nproc)
+
+      - name: Prepare Artifacts & Strip Binaries
+        run: |
+          mkdir -p dist-arm64
+          cp src/proot dist-arm64/proot-aarch64
+          cp src/loader.elf dist-arm64/libproot.so
+          cp src/proot dist-arm64/libproot-xed.so
+
+          aarch64-linux-gnu-strip --strip-unneeded dist-arm64/*
+
+          ls -lh dist-arm64/
+
+      - name: Upload PRoot ARM64 Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: proot-arm64
+          path: dist-arm64/
+          retention-days: 90
+
+  build-x86_64:
+    name: Build PRoot x86_64
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -qq -y \
+            build-essential \
+            pkg-config \
+            uthash-dev \
+            libarchive-dev \
+            libtalloc-dev
+
+      - name: Compile PRoot & Loader (x86_64)
+        run: |
+          make -C src clean
+          make -C src loader.elf build.h proot \
+            WITHOUT_PYTHON=1 \
+            -j$(nproc)
+
+      - name: Prepare Artifacts & Strip Binaries
+        run: |
+          mkdir -p dist-x86_64
+          cp src/proot dist-x86_64/proot-x86_64
+          cp src/loader.elf dist-x86_64/libproot.so
+          cp src/proot dist-x86_64/libproot-xed.so
+
+          strip --strip-unneeded dist-x86_64/*
+
+          ls -lh dist-x86_64/
+
+      - name: Upload PRoot x86_64 Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: proot-x86_64
+          path: dist-x86_64/
+          retention-days: 90
