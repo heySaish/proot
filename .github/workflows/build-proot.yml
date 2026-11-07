@@ -65,7 +65,7 @@ jobs:
             OBJDUMP="aarch64-linux-gnu-objdump" \
             PKG_CONFIG_PATH="$PWD/ndk-deps" \
             CPPFLAGS="-D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -I. -I$PWD/src -I$PWD/lib/uthash/include -I$PWD/ndk-deps/include -DARG_MAX=131072" \
-            LDFLAGS="-L$PWD/ndk-deps/lib -Wl,-rpath-link,$PWD/ndk-deps/lib" \
+            LDFLAGS="-L$PWD/ndk-deps/lib -ltalloc -Wl,-rpath-link,$PWD/ndk-deps/lib" \
             WITHOUT_PYTHON=1 \
             -j$(nproc) \
             V=1
