@@ -25,8 +25,7 @@ jobs:
       - name: Compile PRoot with Android NDK
         run: |
           set -e
-          
-          # Detect NDK path
+
           if [ -d "$ANDROID_NDK_LATEST_HOME" ]; then
             NDK="$ANDROID_NDK_LATEST_HOME"
           elif [ -d "$ANDROID_NDK_ROOT" ]; then
@@ -35,23 +34,19 @@ jobs:
             NDK=$(find /usr/local/lib/android/sdk/ndk -maxdepth 1 -mindepth 1 2>/dev/null | sort -V | tail -n 1)
           fi
           echo "Using Android NDK: $NDK"
-          
-          TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
-          
-          # Setup pre-generated build.h to avoid cross-compilation check fails
-          cat << 'EOF' > src/build.h
-#ifndef BUILD_H
-#define BUILD_H
-#define VERSION "5.5.0-android"
-#define HAVE_PROCESS_VM
-#define HAVE_SECCOMP_FILTER
-#endif
-EOF
 
-          # Clean previous objects
+          TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+
+          printf '%s\n' \
+            '#ifndef BUILD_H' \
+            '#define BUILD_H' \
+            '#define VERSION "5.5.0-android"' \
+            '#define HAVE_PROCESS_VM' \
+            '#define HAVE_SECCOMP_FILTER' \
+            '#endif' > src/build.h
+
           make -C src clean || true
 
-          # Build proot and loader
           make -C src proot \
             CC="$TOOLCHAIN/aarch64-linux-android24-clang" \
             LD="$TOOLCHAIN/aarch64-linux-android24-clang" \
