@@ -37,6 +37,10 @@ jobs:
 
           TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
 
+          echo "#define HAVE_PROCESS_VM" > src/.check_process_vm.res
+          echo "#define HAVE_SECCOMP_FILTER" > src/.check_seccomp_filter.res
+          touch src/.check_process_vm src/.check_seccomp_filter
+
           printf '%s\n' \
             '#ifndef BUILD_H' \
             '#define BUILD_H' \
@@ -44,8 +48,7 @@ jobs:
             '#define HAVE_PROCESS_VM' \
             '#define HAVE_SECCOMP_FILTER' \
             '#endif' > src/build.h
-
-          make -C src clean || true
+          touch -d '+1 hour' src/build.h
 
           make -C src proot \
             CC="$TOOLCHAIN/aarch64-linux-android24-clang" \
@@ -54,7 +57,7 @@ jobs:
             OBJCOPY="aarch64-linux-gnu-objcopy" \
             OBJDUMP="aarch64-linux-gnu-objdump" \
             PKG_CONFIG_PATH="$PWD/ndk-deps" \
-            CPPFLAGS="-I$PWD/ndk-deps/include -DARG_MAX=131072" \
+            CPPFLAGS="-D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -I. -I$PWD/src -I$PWD/ndk-deps/include -I/usr/include -DARG_MAX=131072" \
             LDFLAGS="-L$PWD/ndk-deps/lib -Wl,-rpath-link,$PWD/ndk-deps/lib" \
             WITHOUT_PYTHON=1 \
             V=1
