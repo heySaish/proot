@@ -16,11 +16,13 @@ jobs:
     steps:
       - name: Checkout Source
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Setup Tools & Dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -qq -y binutils-aarch64-linux-gnu uthash-dev pkg-config
+          sudo apt-get install -qq -y binutils-aarch64-linux-gnu pkg-config
 
       - name: Compile PRoot with Android NDK
         run: |
@@ -57,7 +59,7 @@ jobs:
             OBJCOPY="aarch64-linux-gnu-objcopy" \
             OBJDUMP="aarch64-linux-gnu-objdump" \
             PKG_CONFIG_PATH="$PWD/ndk-deps" \
-            CPPFLAGS="-D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -I. -I$PWD/src -I$PWD/ndk-deps/include -I/usr/include -DARG_MAX=131072" \
+            CPPFLAGS="-D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -I. -I$PWD/src -I$PWD/lib/uthash/include -I$PWD/ndk-deps/include -DARG_MAX=131072" \
             LDFLAGS="-L$PWD/ndk-deps/lib -Wl,-rpath-link,$PWD/ndk-deps/lib" \
             WITHOUT_PYTHON=1 \
             V=1
