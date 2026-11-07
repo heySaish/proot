@@ -52,6 +52,11 @@ jobs:
             '#endif' > src/build.h
           touch -d '+1 hour' src/build.h
 
+          mkdir -p src/loader
+          cp ndk-deps/libproot.so src/loader.elf
+          cp ndk-deps/libproot.so src/loader/loader
+          touch -d '+1 hour' src/loader.elf src/loader/loader
+
           make -C src proot \
             CC="$TOOLCHAIN/aarch64-linux-android24-clang" \
             LD="$TOOLCHAIN/aarch64-linux-android24-clang" \
@@ -62,11 +67,12 @@ jobs:
             CPPFLAGS="-D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -I. -I$PWD/src -I$PWD/lib/uthash/include -I$PWD/ndk-deps/include -DARG_MAX=131072" \
             LDFLAGS="-L$PWD/ndk-deps/lib -Wl,-rpath-link,$PWD/ndk-deps/lib" \
             WITHOUT_PYTHON=1 \
+            -j$(nproc) \
             V=1
 
           mkdir -p dist-android-arm64
           cp src/proot dist-android-arm64/libproot-xed.so
-          cp src/loader.elf dist-android-arm64/libproot.so
+          cp ndk-deps/libproot.so dist-android-arm64/libproot.so
           cp ndk-deps/lib/libtalloc.so dist-android-arm64/libtalloc.so
           aarch64-linux-gnu-strip dist-android-arm64/libproot-xed.so
 
