@@ -46,6 +46,106 @@
 #include "arch.h"
 
 /**
+ * Fix st_size for symlinks so that lstat / statx st_size matches the length
+ * returned by readlink(2). On Android fscrypt / encrypted storage, the kernel
+ * reports the encrypted disk block length (e.g. 18 bytes for "usr/bin") in
+ * st_size, while readlink returns the decrypted target string length (7 bytes).
+ * This causes tools like dpkg-realpath to fail with:
+ * "symbolic link '...' size has changed from 18 to 7".
+ */
+static void fix_symlink_stat_size(Tracee *tracee, word_t syscall_number)
+{
+    word_t address;
+    Reg sysarg_stat;
+    Reg sysarg_path;
+    off_t mode_offset;
+    off_t size_offset;
+    mode_t mode;
+    char path[PATH_MAX];
+    int status;
+
+    if (syscall_number == PR_statx) {
+	sysarg_stat = SYSARG_5;
+	sysarg_path = SYSARG_2;
+	mode_offset = OFFSETOF_STATX_MODE;
+	size_offset = OFFSETOF_STATX_SIZE;
+    } else {
+	if (syscall_number == PR_fstatat64 || syscall_number == PR_newfstatat) {
+	    sysarg_stat = SYSARG_3;
+	    sysarg_path = SYSARG_2;
+	} else if (syscall_number == PR_fstat || syscall_number == PR_fstat64) {
+	    sysarg_stat = SYSARG_2;
+	    sysarg_path = SYSARG_1;
+	} else {
+	    sysarg_stat = SYSARG_2;
+	    sysarg_path = SYSARG_1;
+	}
+	mode_offset = offsetof_stat_mode(tracee);
+	size_offset = offsetof_stat_size(tracee);
+    }
+
+    address = peek_reg(tracee, ORIGINAL, sysarg_stat);
+    if (address == 0)
+	return;
+
+    if (syscall_number == PR_statx) {
+	mode = (mode_t) peek_uint16(tracee, address + mode_offset);
+    } else {
+	mode = (mode_t) peek_uint32(tracee, address + mode_offset);
+    }
+    if (errno != 0)
+	return;
+
+    /* Only fix size if this is a symbolic link */
+    if (!S_ISLNK(mode))
+	return;
+
+    /* Get the host path */
+    path[0] = '\0';
+    if (syscall_number == PR_fstat || syscall_number == PR_fstat64) {
+	int fd = (int) peek_reg(tracee, ORIGINAL, sysarg_path);
+	status = readlink_proc_pid_fd(tracee->pid, fd, path);
+	if (status < 0)
+	    return;
+    } else {
+	word_t path_addr = peek_reg(tracee, MODIFIED, sysarg_path);
+	status = read_path(tracee, path, path_addr);
+	if (status < 0 || path[0] == '\0') {
+	    int dirfd = (int) peek_reg(tracee, CURRENT, SYSARG_1);
+	    status = readlink_proc_pid_fd(tracee->pid, dirfd, path);
+	    if (status < 0)
+		return;
+	}
+    }
+
+    /* Read the symlink destination from the host filesystem */
+    char target[PATH_MAX];
+    ssize_t size = readlink(path, target, sizeof(target) - 1);
+    if (size <= 0)
+	return;
+    target[size] = '\0';
+
+    /* Detranslate path so it matches what readlink(2) returns to guest */
+    status = detranslate_path(tracee, target, path);
+    uint64_t target_len;
+    if (status > 0)
+	target_len = (uint64_t) (status - 1);
+    else
+	target_len = (uint64_t) size;
+
+    /* Write corrected size into stat buffer */
+    if (syscall_number == PR_statx) {
+	poke_uint64(tracee, address + size_offset, target_len);
+    } else {
+	if (sizeof_word(tracee) == 4 && (syscall_number == PR_stat || syscall_number == PR_lstat || syscall_number == PR_fstat)) {
+	    poke_uint32(tracee, address + size_offset, (uint32_t) target_len);
+	} else {
+	    poke_uint64(tracee, address + size_offset, target_len);
+	}
+    }
+}
+
+/**
  * Translate the output arguments of the current @tracee's syscall in
  * the @tracee->pid process area. This function sets the result of
  * this syscall to @tracee->status if an error occured previously
@@ -531,6 +631,19 @@ void translate_syscall_exit(Tracee *tracee)
 	    break;
 
 	/* Don't overwrite the syscall result.  */
+	goto end;
+
+    case PR_fstatat64:
+    case PR_newfstatat:
+    case PR_statx:
+    case PR_lstat:
+    case PR_lstat64:
+    case PR_stat:
+    case PR_stat64:
+    case PR_fstat:
+    case PR_fstat64:
+	if ((int) syscall_result >= 0)
+	    fix_symlink_stat_size(tracee, syscall_number);
 	goto end;
 
     default:

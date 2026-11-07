@@ -125,4 +125,22 @@ static inline off_t offsetof_stat_gid(const Tracee *tracee)
 	    ? OFFSETOF_STAT_GID_32 : offsetof(struct stat, st_gid));
 }
 
+/**
+ * Return the offset of the 'mode' field in a 'stat' structure
+ * according to the ABI currently used by the given @tracee.
+ */
+static inline off_t offsetof_stat_mode(const Tracee *tracee UNUSED)
+{
+    return offsetof(struct stat, st_mode);
+}
+
+/**
+ * Return the offset of the 'size' field in a 'stat' structure
+ * according to the ABI currently used by the given @tracee.
+ */
+static inline off_t offsetof_stat_size(const Tracee *tracee UNUSED)
+{
+    return offsetof(struct stat, st_size);
+}
+
 #endif				/* TRACEE_ABI_H */

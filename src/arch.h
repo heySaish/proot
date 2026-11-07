@@ -37,6 +37,8 @@ typedef unsigned char byte_t;
 
 #define OFFSETOF_STATX_UID 20
 #define OFFSETOF_STATX_GID 24
+#define OFFSETOF_STATX_MODE 28
+#define OFFSETOF_STATX_SIZE 40
 
 #if !defined(ARCH_X86_64) && !defined(ARCH_ARM_EABI) && !defined(ARCH_X86) && !defined(ARCH_SH4)
 #if defined(__x86_64__)
