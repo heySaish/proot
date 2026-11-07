@@ -574,7 +574,14 @@ link2symlink_callback(Extension *extension, ExtensionEvent event,
 		if (status < 0)
 		    return status;
 
-		set_sysnum(tracee, PR_symlink);
+		if (detranslate_sysnum(get_abi(tracee), PR_symlink) == SYSCALL_AVOIDER) {
+		    /* Architecture has no symlink(2), only symlinkat(2) (e.g. AArch64) */
+		    poke_reg(tracee, SYSARG_3, peek_reg(tracee, CURRENT, SYSARG_2));
+		    poke_reg(tracee, SYSARG_2, (word_t) AT_FDCWD);
+		    set_sysnum(tracee, PR_symlinkat);
+		} else {
+		    set_sysnum(tracee, PR_symlink);
+		}
 		break;
 
 	    case PR_linkat:
@@ -601,12 +608,23 @@ link2symlink_callback(Extension *extension, ExtensionEvent event,
 		if (status < 0)
 		    return status;
 
-		poke_reg(tracee, SYSARG_1,
-			 peek_reg(tracee, CURRENT, SYSARG_2));
-		poke_reg(tracee, SYSARG_2,
-			 peek_reg(tracee, CURRENT, SYSARG_4));
+		if (detranslate_sysnum(get_abi(tracee), PR_symlink) == SYSCALL_AVOIDER) {
+		    /* Architecture has no symlink(2), only symlinkat(2) (e.g. AArch64) */
+		    word_t intermediate_addr = peek_reg(tracee, CURRENT, SYSARG_2);
+		    word_t newpath_addr = peek_reg(tracee, CURRENT, SYSARG_4);
 
-		set_sysnum(tracee, PR_symlink);
+		    poke_reg(tracee, SYSARG_1, intermediate_addr);
+		    poke_reg(tracee, SYSARG_2, (word_t) AT_FDCWD);
+		    poke_reg(tracee, SYSARG_3, newpath_addr);
+		    set_sysnum(tracee, PR_symlinkat);
+		} else {
+		    poke_reg(tracee, SYSARG_1,
+			     peek_reg(tracee, CURRENT, SYSARG_2));
+		    poke_reg(tracee, SYSARG_2,
+			     peek_reg(tracee, CURRENT, SYSARG_4));
+
+		    set_sysnum(tracee, PR_symlink);
+		}
 		break;
 
 	    default:
